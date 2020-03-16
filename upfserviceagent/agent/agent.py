@@ -27,12 +27,12 @@ from argparse import ArgumentParser
 
 import websocket
 from threading import Thread
+from uuid import uuid4
 
 from upfserviceagent.agent import PT_VERSION
 from upfserviceagent.agent import PT_HELLO
 from upfserviceagent.agent import PT_UE_MAP
-from upfserviceagent.agent import PT_MATCH_OK
-from upfserviceagent.agent import PT_MATCH_KO
+from upfserviceagent.agent import PT_MATCH_ACTION_RESULT
 from upfserviceagent.handlers.uemap import get_uemap
 from upfserviceagent.handlers.matchmap import MatchMap
 
@@ -47,6 +47,10 @@ UPF_SERVICE_UE_SUBNET = "10.0.0.0/8"
 UPF_SERVICE_EVERY = 2
 
 
+def get_uuid():
+    return str(uuid4())
+
+
 def dump_message(message):
     """Dump a generic message.
 
@@ -57,7 +61,7 @@ def dump_message(message):
         None
     """
 
-    header = "Received %s" % message['type']
+    header = "Received %s, uuid %s" % (message['type'], message['uuid'])
 
     del message['version']
     del message['type']
@@ -180,6 +184,37 @@ class UPFServiceAgent(websocket.WebSocketApp):
             finally:
                 time.sleep(self.us_every)
 
+    def send_message(self, message_type, message, uuid):
+        """Add fixed header fields and send message. """
+
+        message['version'] = PT_VERSION
+        message['type'] = message_type
+        message['uuid'] = uuid
+
+        logging.info("Sending %s, uuid %s", message['type'], message['uuid'])
+
+        msg = json.dumps(message)
+        self.send(msg)
+
+    def send_hello(self):
+        """ Send HELLO message. """
+
+        hello = {'every': self.usm_every}
+        self.send_message(PT_HELLO, hello, get_uuid())
+
+    def send_ue_map(self, ue_map):
+        """ Send UE_MAP message. """
+
+        self.send_message(PT_UE_MAP, ue_map, get_uuid())
+
+    def send_match_action_result(self, match_index, status, uuid, reason=None):
+        """ Send MATCH_ACTION_RESULT message. """
+
+        result = {'match_index': match_index,
+                  'status': status,
+                  'reason': reason}
+        self.send_message(PT_MATCH_ACTION_RESULT, result, uuid)
+
     def handle_message(self, msg):
         """ Handle incoming message (as a Python dict). """
 
@@ -192,40 +227,6 @@ class UPFServiceAgent(websocket.WebSocketApp):
         handler = getattr(self, handler_name)
         handler(msg)
 
-    def send_message(self, message_type, message):
-        """Add fixed header fields and send message. """
-
-        message['version'] = PT_VERSION
-        message['type'] = message_type
-
-        logging.info("Sending %s", message['type'])
-
-        msg = json.dumps(message)
-        self.send(msg)
-
-    def send_hello(self):
-        """ Send HELLO message. """
-
-        hello = {'every': self.usm_every}
-        self.send_message(PT_HELLO, hello)
-
-    def send_ue_map(self, ue_map):
-        """ Send UE_MAP message. """
-
-        self.send_message(PT_UE_MAP, ue_map)
-
-    def send_match_ok(self, match_index):
-        """ Send MATCH_OK message. """
-
-        ok = {'match_index': match_index}
-        self.send_message(PT_MATCH_OK, ok)
-
-    def send_match_ko(self, match_index):
-        """ Send MATCH_KO message. """
-
-        ko = {'match_index': match_index}
-        self.send_message(PT_MATCH_KO, ko)
-
     def _handle_match_add(self, message):
         """Handle MATCH_ADD message.
 
@@ -237,15 +238,31 @@ class UPFServiceAgent(websocket.WebSocketApp):
 
         dump_message(message)
 
+        status = 201
+        reason = None
+        index = -1
+
         try:
+            index = message["match"]["index"]
             self.matchmap.add_matchmap(message["match"])
 
+        except KeyError as ex:
+            status = 404
+            reason = str(ex)
+        except ValueError as ex:
+            status = 400
+            reason = str(ex)
         except Exception as ex:
-            logging.info("Exception while adding matchmap: %s" % ex)
-            self.send_match_ko(message["match"]["index"])
-            return
+            status = 500
+            reason = str(ex)
+        finally:
 
-        self.send_match_ok(message["match"]["index"])
+            if status == 201:
+                self.send_match_action_result(index, status, message["uuid"])
+            else:
+                logging.info("Exception while adding matchmap: %s" % reason)
+                self.send_match_action_result(index, 500, message["uuid"],
+                                              reason=reason)
 
     def _handle_match_delete(self, message):
         """Handle MATCH_DELETE message.
@@ -258,15 +275,28 @@ class UPFServiceAgent(websocket.WebSocketApp):
 
         dump_message(message)
 
+        status = 204
+        reason = None
+        index = -1
+
         try:
+            index = message["match_index"]
             self.matchmap.delete_matchmap(message["match_index"])
 
+        except KeyError as ex:
+            status = 404
+            reason = str(ex)
         except Exception as ex:
-            logging.info("Exception while deleting matchmap: %s" % ex)
-            self.send_match_ko(message["match_index"])
-            return
+            status = 500
+            reason = str(ex)
+        finally:
 
-        self.send_match_ok(message["match_index"])
+            if status == 204:
+                self.send_match_action_result(index, status, message["uuid"])
+            else:
+                logging.info("Exception while deleting matchmap: %s" % reason)
+                self.send_match_action_result(index, 500, message["uuid"],
+                                              reason=reason)
 
 
 def main():

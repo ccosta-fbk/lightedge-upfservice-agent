@@ -23,8 +23,7 @@ PT_VERSION = 0
 # agent to manager
 PT_HELLO = "hello"
 PT_UE_MAP = "ue_map"
-PT_MATCH_OK = "match_ok"
-PT_MATCH_KO = "match_ko"
+PT_MATCH_ACTION_RESULT = "match_action_result"
 
 # manager to agent
 PT_MATCH_ADD = "match_add"
