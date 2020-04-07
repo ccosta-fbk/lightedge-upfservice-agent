@@ -40,6 +40,7 @@ from upfserviceagent.handlers.matchmap import MatchMap
 UPF_SERVICE_MANAGER_ADDRESS = "127.0.0.1"
 UPF_SERVICE_MANAGER_PORT = 7000
 UPF_SERVICE_MANAGER_EVERY = 5
+UPF_SERVICE_MANAGER_TAG = None
 UPF_SERVICE_ADDRESS = "127.0.0.1"
 UPF_SERVICE_PORT = 7777
 UPF_SERVICE_ELEMENT = "upfr"
@@ -103,6 +104,7 @@ class UPFServiceAgent(websocket.WebSocketApp):
         usm_addr: The UPF Service Manager address
         usm_port: The UPF Service Manager port
         usm_every: The hello period toward the UPF Service Manager
+        usm_tag: The tag to use in hello messages toward the UPF Service Manager
         us_addr: The UPF Service address
         us_port: The UPF Service port
         us_element: The UPF Service click element name
@@ -110,8 +112,8 @@ class UPFServiceAgent(websocket.WebSocketApp):
         us_every: The UPF Service UE list's polling period
     """
 
-    def __init__(self, url, usm_addr, usm_port, usm_every, us_addr, us_port,
-                 us_element, us_ue_subnet, us_every, logdir):
+    def __init__(self, url, usm_addr, usm_port, usm_every, usm_tag, us_addr,
+                 us_port, us_element, us_ue_subnet, us_every, logdir):
 
         super().__init__(url)
 
@@ -119,6 +121,7 @@ class UPFServiceAgent(websocket.WebSocketApp):
         self.usm_addr = usm_addr
         self.usm_port = usm_port
         self.usm_every = usm_every
+        self.usm_tag = usm_tag
         self.us_addr = us_addr
         self.us_port = us_port
         self.us_element = us_element
@@ -199,7 +202,7 @@ class UPFServiceAgent(websocket.WebSocketApp):
     def send_hello(self):
         """ Send HELLO message. """
 
-        hello = {'every': self.usm_every}
+        hello = {'every': self.usm_every, 'tag': self.usm_tag}
         self.send_message(PT_HELLO, hello, get_uuid())
 
     def send_ue_map(self, ue_map):
@@ -324,6 +327,11 @@ def main():
                         help="UPF Service Manager keepalive period; default=%s"
                              % UPF_SERVICE_MANAGER_EVERY)
 
+    parser.add_argument("-mt", "--usm_tag", dest="usm_tag",
+                        default=UPF_SERVICE_MANAGER_TAG,
+                        help="Tag to use in hello messages; default=%s"
+                             % UPF_SERVICE_MANAGER_TAG)
+
     parser.add_argument("-a", "--us_addr", dest="us_addr",
                         default=UPF_SERVICE_ADDRESS,
                         help="UPF Service address; default=%s"
@@ -359,8 +367,9 @@ def main():
 
     url = "ws://%s:%u/" % (args.usm_addr, args.usm_port)
     agent = UPFServiceAgent(url, args.usm_addr, args.usm_addr, args.usm_every,
-                            args.us_addr, args.us_port, args.us_element,
-                            args.us_ue_subnet, args.us_every, args.logdir)
+                            args.usm_tag, args.us_addr, args.us_port,
+                            args.us_element, args.us_ue_subnet, args.us_every,
+                            args.logdir)
 
     agent.on_open = on_open
     agent.on_message = on_message
