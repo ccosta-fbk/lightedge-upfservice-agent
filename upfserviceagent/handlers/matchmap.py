@@ -42,6 +42,8 @@ class MatchMap:
         self.nat_table = None
         self.upf_chain = None
 
+        self.uuid_index_map = dict()
+
     def start(self):
 
         self._init_click_upf()
@@ -87,7 +89,12 @@ class MatchMap:
 
         self.nat_table.refresh()
 
-    def add_matchmap(self, match):
+    def add_matchmap(self, match, match_uuid):
+
+        if match_uuid in self.uuid_index_map:
+            raise ValueError("Duplicate matchmap uuid")
+
+        self.uuid_index_map[match_uuid] = match["index"]
 
         upf_service_match = "%s,%s-%s/%s-%s" % (match["index"],
                                                 match["ip_proto_num"],
@@ -139,19 +146,24 @@ class MatchMap:
         rule.dst = "%s/%s" % (match["dst_ip"], match["netmask"])
 
         if match["dst_port"] != 0:
-            ipt_match = IPT_Match(rule, self._prot_port_supp[match["ip_proto_num"]])
+            ipt_match = IPT_Match(rule,
+                                  self._prot_port_supp[match["ip_proto_num"]])
             ipt_match["dport"] = str(match["dst_port"])
             rule.add_match(ipt_match)
 
         return rule
 
-    def delete_matchmap(self, match_index):
+    def delete_matchmap(self, match_uuid):
         """Delete a match rule."""
 
-        if match_index != -1:
+        if match_uuid:
+            match_index = self.uuid_index_map[match_uuid]
             handler_name = "matchmapdelete"
             self.upf_chain.delete_rule(self.upf_chain.rules[match_index])
+            del self.uuid_index_map[match_uuid]
         else:
+            self.uuid_index_map = dict()
+            match_index = -1
             handler_name = "matchmapclear"
             self.upf_chain.flush()
 

@@ -210,11 +210,10 @@ class UPFServiceAgent(websocket.WebSocketApp):
 
         self.send_message(PT_UE_MAP, ue_map, get_uuid())
 
-    def send_match_action_result(self, match_index, status, uuid, reason=None):
+    def send_match_action_result(self, status, uuid, reason=None):
         """ Send MATCH_ACTION_RESULT message. """
 
-        result = {'match_index': match_index,
-                  'status': status,
+        result = {'status': status,
                   'reason': reason}
         self.send_message(PT_MATCH_ACTION_RESULT, result, uuid)
 
@@ -243,11 +242,9 @@ class UPFServiceAgent(websocket.WebSocketApp):
 
         status = 201
         reason = None
-        index = -1
 
         try:
-            index = message["match"]["index"]
-            self.matchmap.add_matchmap(message["match"])
+            self.matchmap.add_matchmap(message["match"], message["uuid"])
 
         except KeyError as ex:
             status = 404
@@ -261,10 +258,10 @@ class UPFServiceAgent(websocket.WebSocketApp):
         finally:
 
             if status == 201:
-                self.send_match_action_result(index, status, message["uuid"])
+                self.send_match_action_result(status, message["uuid"])
             else:
                 logging.info("Exception while adding matchmap: %s" % reason)
-                self.send_match_action_result(index, 500, message["uuid"],
+                self.send_match_action_result(500, message["uuid"],
                                               reason=reason)
 
     def _handle_match_delete(self, message):
@@ -280,11 +277,9 @@ class UPFServiceAgent(websocket.WebSocketApp):
 
         status = 204
         reason = None
-        index = -1
 
         try:
-            index = message["match_index"]
-            self.matchmap.delete_matchmap(message["match_index"])
+            self.matchmap.delete_matchmap(message["match_uuid"])
 
         except KeyError as ex:
             status = 404
@@ -295,10 +290,10 @@ class UPFServiceAgent(websocket.WebSocketApp):
         finally:
 
             if status == 204:
-                self.send_match_action_result(index, status, message["uuid"])
+                self.send_match_action_result(status, message["uuid"])
             else:
                 logging.info("Exception while deleting matchmap: %s" % reason)
-                self.send_match_action_result(index, 500, message["uuid"],
+                self.send_match_action_result(500, message["uuid"],
                                               reason=reason)
 
 
