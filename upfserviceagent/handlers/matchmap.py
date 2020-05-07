@@ -88,6 +88,7 @@ class MatchMap:
         prerouting_chain.insert_rule(upf_rule)
 
         self.nat_table.refresh()
+        self.upf_chain.flush()
 
     def add_matchmap(self, match, match_uuid):
 
