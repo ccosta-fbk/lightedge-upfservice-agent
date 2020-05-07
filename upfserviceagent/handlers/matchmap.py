@@ -148,7 +148,7 @@ class MatchMap:
         if match["dst_port"] != 0:
             ipt_match = IPT_Match(rule,
                                   self._prot_port_supp[match["ip_proto_num"]])
-            ipt_match["dport"] = str(match["dst_port"])
+            ipt_match.dport = str(match["dst_port"])
             rule.add_match(ipt_match)
 
         return rule
